@@ -290,7 +290,7 @@ public class SchematicPrinter {
             return false;
         }
 
-        final EnumFacing direction;
+        final List<EnumFacing> directions;
         final float offsetX;
         final float offsetY;
         final float offsetZ;
@@ -302,13 +302,13 @@ public class SchematicPrinter {
                 return false;
             }
 
-            direction = validDirections.get(0);
+            directions = validDirections;
             offsetX = data.getOffsetX(blockState);
             offsetY = data.getOffsetY(blockState);
             offsetZ = data.getOffsetZ(blockState);
             extraClicks = data.getExtraClicks(blockState);
         } else {
-            direction = solidSides.get(0);
+            directions = solidSides;
             offsetX = 0.5f;
             offsetY = 0.5f;
             offsetZ = 0.5f;
@@ -318,8 +318,22 @@ public class SchematicPrinter {
         if (!swapToItem(player.inventory, itemStack)) {
             return false;
         }
+        
+        EnumFacing choice = null;
+        for (EnumFacing baseBlock : directions) {
+        	Vec3d clickPos = getClickPosition(pos, baseBlock);
+        	RayTraceResult raytraceresult = world.rayTraceBlocks(player.getPositionEyes(1F), clickPos, false, false, true);
+            boolean canSeeBlock = raytraceresult != null && raytraceresult.getBlockPos().equals(pos);
+            if (canSeeBlock) {
+            	choice = baseBlock;
+            	break;
+            }
+		}
+        if (choice == null) {
+        	return false;
+        }
 
-        return placeBlock(world, player, pos, direction, offsetX, offsetY, offsetZ, extraClicks);
+        return placeBlock(world, player, pos, choice, offsetX, offsetY, offsetZ, extraClicks);
     }
 
     private boolean placeBlock(final WorldClient world, final EntityPlayerSP player, final BlockPos pos, final EnumFacing direction, final float offsetX, final float offsetY, final float offsetZ, final int extraClicks) {
@@ -347,16 +361,20 @@ public class SchematicPrinter {
         return success;
     }
     
-    private void lookAtBlock(final EntityPlayerSP player, final BlockPos pos, EnumFacing side) {
+    private Vec3d getClickPosition(final BlockPos pos, EnumFacing side) {
     	//Calculate the middle of the side of the block something is placed against
     	double blockSideX = pos.getX() + 0.5d + side.getFrontOffsetX() / 2D;
     	double blockSideY = pos.getY() + 0.5d + side.getFrontOffsetY() / 2D;
     	double blockSideZ = pos.getZ() + 0.5d + side.getFrontOffsetZ() / 2D;
     	
+    	return new Vec3d(blockSideX, blockSideY, blockSideZ);
+    }
+    
+    private void lookAtPosition(final EntityPlayerSP player, Vec3d pos) {
     	//Analog to faceEntity in EntityLiving
-    	double xDiff = blockSideX - player.posX;
-        double yDiff = blockSideY - (player.getPositionEyes(1F).y);
-        double zDiff = blockSideZ - player.posZ;
+    	double xDiff = pos.x - player.posX;
+        double yDiff = pos.y - player.getPositionEyes(1F).y;
+        double zDiff = pos.z - player.posZ;
         double distance = (double)MathHelper.sqrt(xDiff * xDiff + zDiff * zDiff);
         
         player.rotationYaw = MathHelper.wrapDegrees((float)(MathHelper.atan2(zDiff, xDiff) * (180D / Math.PI)) - 90.0F);
@@ -378,14 +396,8 @@ public class SchematicPrinter {
         }
         */
     	
-    	RayTraceResult raytraceresult = world.rayTraceBlocks(player.getPositionEyes(1F), new Vec3d(pos));
-        boolean canSeeBlock = raytraceresult != null && raytraceresult.getBlockPos().equals(pos);
-        /*if (!canSeeBlock) {
-        	return false;
-        }*/
-    	
-        lookAtBlock(player, pos, side);        
-        
+    	Vec3d clickPos = getClickPosition(pos, side);
+    	lookAtPosition(player, clickPos);
         
     	// FIXME: when an adjacent block is not required the blocks should be placed 1 block away from the actual position (because air is replaceable)
         final BlockPos actualPos = ConfigurationHandler.placeAdjacent ? pos : pos.offset(side);
