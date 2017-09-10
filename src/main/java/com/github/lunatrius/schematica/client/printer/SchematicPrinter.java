@@ -18,6 +18,9 @@ import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.multiplayer.WorldClient;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityLiving;
+import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.inventory.ClickType;
 import net.minecraft.item.ItemBucket;
@@ -27,6 +30,7 @@ import net.minecraft.util.EnumActionResult;
 import net.minecraft.util.EnumFacing;
 import net.minecraft.util.EnumHand;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
@@ -181,7 +185,9 @@ public class SchematicPrinter {
                 } else if (tries >= 10) {
                     return false;
                 }
-
+                
+                
+                
                 Reference.logger.trace("Trying to sync block at {} {}", realPos, tries);
                 final boolean success = handler.execute(player, this.schematic, pos, world, realPos);
                 if (success) {
@@ -340,6 +346,29 @@ public class SchematicPrinter {
 
         return success;
     }
+    
+    private void lookAtBlock(final EntityPlayerSP player, final BlockPos pos, EnumFacing side) {
+    	//Calculate the middle of the side of the block something is placed against
+    	double blockSideX = pos.getX() + 0.5d + side.getFrontOffsetX() / 2D;
+    	double blockSideY = pos.getY() + 0.5d + side.getFrontOffsetY() / 2D;
+    	double blockSideZ = pos.getZ() + 0.5d + side.getFrontOffsetZ() / 2D;
+    	
+    	//Analog to faceEntity in EntityLiving
+    	double xDiff = blockSideX - player.posX;
+        double yDiff = blockSideY - (player.getPositionEyes(1F).y);
+        double zDiff = blockSideZ - player.posZ;
+        double distance = (double)MathHelper.sqrt(xDiff * xDiff + zDiff * zDiff);
+        
+        player.rotationYaw = MathHelper.wrapDegrees((float)(MathHelper.atan2(zDiff, xDiff) * (180D / Math.PI)) - 90.0F);
+        player.rotationPitch = MathHelper.wrapDegrees((float)(-(MathHelper.atan2(yDiff, distance) * (180D / Math.PI))));
+        
+        float yawDiff = player.rotationYaw - player.prevRotationYaw;
+        if (yawDiff > 180F) {
+        	player.prevRotationYaw += 360;
+        } else if (yawDiff < -180F) {
+        	player.prevRotationYaw -= 360;
+        }
+    }
 
     private boolean placeBlock(final WorldClient world, final EntityPlayerSP player, final ItemStack itemStack, final BlockPos pos, final EnumFacing side, final Vec3d hitVec, final EnumHand hand) {
         // FIXME: where did this event go?
@@ -348,8 +377,17 @@ public class SchematicPrinter {
             return false;
         }
         */
-
-        // FIXME: when an adjacent block is not required the blocks should be placed 1 block away from the actual position (because air is replaceable)
+    	
+    	RayTraceResult raytraceresult = world.rayTraceBlocks(player.getPositionEyes(1F), new Vec3d(pos));
+        boolean canSeeBlock = raytraceresult != null && raytraceresult.getBlockPos().equals(pos);
+        /*if (!canSeeBlock) {
+        	return false;
+        }*/
+    	
+        lookAtBlock(player, pos, side);        
+        
+        
+    	// FIXME: when an adjacent block is not required the blocks should be placed 1 block away from the actual position (because air is replaceable)
         final BlockPos actualPos = ConfigurationHandler.placeAdjacent ? pos : pos.offset(side);
         final EnumActionResult result = this.minecraft.playerController.processRightClickBlock(player, world, actualPos, side, hitVec, hand);
         if ((result != EnumActionResult.SUCCESS)) {
