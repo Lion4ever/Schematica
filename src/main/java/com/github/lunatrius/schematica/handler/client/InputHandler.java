@@ -73,6 +73,8 @@ public class InputHandler {
                 if (schematic != null && schematic.isRenderingLayer) {
                     schematic.renderingLayer = MathHelper.clamp(schematic.renderingLayer + 1, 0, schematic.getHeight() - 1);
                     RenderSchematic.INSTANCE.refresh();
+                    SchematicPrinter.INSTANCE.refresh();
+                    
                 }
             }
 
@@ -81,6 +83,7 @@ public class InputHandler {
                 if (schematic != null && schematic.isRenderingLayer) {
                     schematic.renderingLayer = MathHelper.clamp(schematic.renderingLayer - 1, 0, schematic.getHeight() - 1);
                     RenderSchematic.INSTANCE.refresh();
+                    SchematicPrinter.INSTANCE.refresh();
                 }
             }
 
@@ -89,6 +92,7 @@ public class InputHandler {
                 if (schematic != null) {
                     schematic.isRenderingLayer = !schematic.isRenderingLayer;
                     RenderSchematic.INSTANCE.refresh();
+                    SchematicPrinter.INSTANCE.refresh();
                 }
             }
 
@@ -112,6 +116,7 @@ public class InputHandler {
                 if (schematic != null) {
                     ClientProxy.moveSchematicToPlayer(schematic);
                     RenderSchematic.INSTANCE.refresh();
+                    SchematicPrinter.INSTANCE.refresh();
                 }
             }
 
