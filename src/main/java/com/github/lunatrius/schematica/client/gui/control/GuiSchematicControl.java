@@ -170,12 +170,15 @@ public class GuiSchematicControl extends GuiScreenBase {
             if (guiButton.id == this.numericX.id) {
                 this.schematic.position.x = this.numericX.getValue();
                 RenderSchematic.INSTANCE.refresh();
+                SchematicPrinter.INSTANCE.refresh();
             } else if (guiButton.id == this.numericY.id) {
                 this.schematic.position.y = this.numericY.getValue();
                 RenderSchematic.INSTANCE.refresh();
+                SchematicPrinter.INSTANCE.refresh();
             } else if (guiButton.id == this.numericZ.id) {
                 this.schematic.position.z = this.numericZ.getValue();
                 RenderSchematic.INSTANCE.refresh();
+                SchematicPrinter.INSTANCE.refresh();
             } else if (guiButton.id == this.btnUnload.id) {
                 Schematica.proxy.unloadSchematic();
                 this.mc.displayGuiScreen(this.parentScreen);
@@ -184,19 +187,23 @@ public class GuiSchematicControl extends GuiScreenBase {
                 this.btnLayerMode.displayString = this.schematic.isRenderingLayer ? this.strLayers : this.strAll;
                 this.nfLayer.setEnabled(this.schematic.isRenderingLayer);
                 RenderSchematic.INSTANCE.refresh();
+                SchematicPrinter.INSTANCE.refresh();
             } else if (guiButton.id == this.nfLayer.id) {
                 this.schematic.renderingLayer = this.nfLayer.getValue();
                 RenderSchematic.INSTANCE.refresh();
+                SchematicPrinter.INSTANCE.refresh();
             } else if (guiButton.id == this.btnHide.id) {
                 this.btnHide.displayString = this.schematic.toggleRendering() ? this.strHide : this.strShow;
             } else if (guiButton.id == this.btnMove.id) {
                 ClientProxy.moveSchematicToPlayer(this.schematic);
                 RenderSchematic.INSTANCE.refresh();
+                SchematicPrinter.INSTANCE.refresh();
                 setPoint(this.numericX, this.numericY, this.numericZ, this.schematic.position);
             } else if (guiButton.id == this.btnFlipDirection.id) {
                 final EnumFacing[] values = EnumFacing.VALUES;
                 ClientProxy.axisFlip = values[((ClientProxy.axisFlip.ordinal() + 2) % values.length)];
                 guiButton.displayString = I18n.format(Names.Gui.Control.TRANSFORM_PREFIX + ClientProxy.axisFlip.getName());
+                SchematicPrinter.INSTANCE.refresh();
             } else if (guiButton.id == this.btnFlip.id) {
                 if (FlipHelper.INSTANCE.flip(this.schematic, ClientProxy.axisFlip, isShiftKeyDown())) {
                     RenderSchematic.INSTANCE.refresh();
@@ -206,6 +213,7 @@ public class GuiSchematicControl extends GuiScreenBase {
                 final EnumFacing[] values = EnumFacing.VALUES;
                 ClientProxy.axisRotation = values[((ClientProxy.axisRotation.ordinal() + 1) % values.length)];
                 guiButton.displayString = I18n.format(Names.Gui.Control.TRANSFORM_PREFIX + ClientProxy.axisRotation.getName());
+                SchematicPrinter.INSTANCE.refresh();
             } else if (guiButton.id == this.btnRotate.id) {
                 if (RotationHelper.INSTANCE.rotate(this.schematic, ClientProxy.axisRotation, isShiftKeyDown())) {
                     setPoint(this.numericX, this.numericY, this.numericZ, this.schematic.position);

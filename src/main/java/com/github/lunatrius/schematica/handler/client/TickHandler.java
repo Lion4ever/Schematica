@@ -49,8 +49,8 @@ public class TickHandler {
         if (world != null && player != null && schematic != null && schematic.isRendering) {
             this.minecraft.mcProfiler.startSection("printer");
             final SchematicPrinter printer = SchematicPrinter.INSTANCE;
-            printer.faceTask();
-            if (printer.isEnabled() && printer.isPrinting() && this.ticks-- < 0) {
+            
+            if (!printer.faceTask() && printer.isEnabled() && printer.isPrinting() && this.ticks-- < 0) {
                 this.ticks = ConfigurationHandler.placeDelay;
 
                 printer.print(world, player);
