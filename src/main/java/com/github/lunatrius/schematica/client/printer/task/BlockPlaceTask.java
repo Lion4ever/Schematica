@@ -1,6 +1,7 @@
 package com.github.lunatrius.schematica.client.printer.task;
 
 import com.github.lunatrius.schematica.client.printer.SchematicPrinter;
+import com.github.lunatrius.schematica.client.printer.TimeoutState;
 import com.github.lunatrius.schematica.handler.ConfigurationHandler;
 
 import it.unimi.dsi.fastutil.shorts.Short2CharArrayMap;
@@ -44,7 +45,7 @@ public class BlockPlaceTask extends PrinterTask {
 		// placed 1 block away from the actual position (because air is
 		// replaceable)
 		final BlockPos actualPos = ConfigurationHandler.placeAdjacent ? pos : pos.offset(side);
-		SchematicPrinter.INSTANCE.setTimeout(pos.offset(side), ConfigurationHandler.timeout);
+		SchematicPrinter.INSTANCE.setTimeout(pos.offset(side), -TimeoutState.ALLREADY_PLACED.ordinal());
 		endTask();
 		return minecraft.playerController.processRightClickBlock(minecraft.player, minecraft.world, actualPos, side,
 				hitVec, hand);
@@ -56,6 +57,13 @@ public class BlockPlaceTask extends PrinterTask {
 
 	public BlockPos getPos() {
 		return pos;
+	}
+	
+	public void queueWithFacing() {
+		if (true) {
+			new FaceBlockSideTask(pos, side).queue();
+		}
+		this.queue();
 	}
 
 }

@@ -9,6 +9,7 @@ import com.github.lunatrius.schematica.client.printer.registry.PlacementData;
 import com.github.lunatrius.schematica.client.printer.registry.PlacementRegistry;
 import com.github.lunatrius.schematica.client.printer.task.BlockBreakTask;
 import com.github.lunatrius.schematica.client.printer.task.BlockPlaceTask;
+import com.github.lunatrius.schematica.client.printer.task.BridgeOverTask;
 import com.github.lunatrius.schematica.client.printer.task.FaceBlockSideTask;
 import com.github.lunatrius.schematica.client.printer.task.LeanOverBlockTask;
 import com.github.lunatrius.schematica.client.printer.task.LoopedPrinterTask;
@@ -26,6 +27,7 @@ import com.github.lunatrius.schematica.reference.Reference;
 import com.github.lunatrius.schematica.util.ItemStackSortType;
 
 import net.minecraft.block.Block;
+import net.minecraft.block.BlockStructureVoid;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
@@ -151,7 +153,7 @@ public class SchematicPrinter {
 		if (currentTask != null) {
 			currentTask.execute();
 		}
-		
+
 		if (minX > maxX || minY > maxY || minZ > maxZ) {
 			return false;
 		}
@@ -191,6 +193,10 @@ public class SchematicPrinter {
 			final Block realBlock = realBlockState.getBlock();
 
 			double currentSqDis = pos.distanceSqToCenter(dX, dY, dZ);
+			
+			if (blockState.getBlock() instanceof BlockStructureVoid) {
+				continue;
+			}
 
 			if (!BlockStateHelper.areBlockStatesEqual(blockState, realBlockState)) {
 				List<EnumFacing> sides = getSolidSides(world, realPos);
@@ -198,7 +204,9 @@ public class SchematicPrinter {
 				sides.remove(EnumFacing.DOWN);
 				boolean hasSideBlockNow = sides.size() > 0;
 				if (((currentSqDis < minDistance) || (hasSideBlockNow && !hasSideBlock))
-						&& (ConfigurationHandler.destroyBlocks || world.isAirBlock(realPos))) {
+						&& (ConfigurationHandler.destroyBlocks || world.isAirBlock(realPos))
+						&& this.timeout[pos.getX()][pos.getY()][pos.getZ()] != -TimeoutState.ALLREADY_PLACED
+								.ordinal()) {
 					closestMismatch = realPos;
 					minDistance = currentSqDis;
 					hasSideBlock = hasSideBlockNow;
@@ -230,16 +238,20 @@ public class SchematicPrinter {
 				}
 			} else {
 				List<EnumFacing> sides = getSolidSides(world, closestMismatch);
-				if (sides.size() == 0 || sides.get(sides.size() - 1).ordinal() < 2) {
-					Reference.logger.error("Could not reach the next block!");
-					togglePrinting();
-					return true;
+				EnumFacing choosenSide;
+				boolean pathFailed = false;
+				if (sides.size() > 0 && sides.get(sides.size() - 1).ordinal() >= 2) {
+					choosenSide = sides.get(sides.size() - 1);
+					//new PathFindTask(closestMismatch.offset(choosenSide).offset(EnumFacing.UP)).queue();
 				}
-				Reference.logger.error("Walking to next block!");
-				EnumFacing side = sides.get(sides.size() - 1);
-				new SimpleMoveTask(closestMismatch.offset(side).offset(EnumFacing.UP), false).queue();
+				
+				if (sides.size() == 0 || sides.get(sides.size() - 1).ordinal() < 2 || pathFailed || true) {
+					BlockPos d = player.getPosition().subtract(closestMismatch);
+					choosenSide = EnumFacing.getFacingFromVector(d.getX(), 0, d.getZ());
+					new BridgeOverTask(closestMismatch.offset(EnumFacing.UP)).queue();
+				}
 				if (!isSolid(world, closestMismatch, EnumFacing.DOWN)) {
-					new LeanOverBlockTask(closestMismatch.offset(side), side.getOpposite()).queue();
+					new LeanOverBlockTask(closestMismatch.offset(choosenSide), choosenSide.getOpposite()).queue();
 				}
 			}
 		}
@@ -261,7 +273,11 @@ public class SchematicPrinter {
 			this.timeout[x][y][z]--;
 			return false;
 		}
-		if (this.timeout[x][y][z] == -1) {
+		if (this.timeout[x][y][z] == -TimeoutState.HAS_TASK.ordinal()) {
+			return true;
+		}
+
+		if (this.timeout[x][y][z] == -TimeoutState.ALLREADY_PLACED.ordinal()) {
 			return false;
 		}
 
@@ -297,7 +313,7 @@ public class SchematicPrinter {
 			}
 			return false;
 		}
-		
+
 		if (ConfigurationHandler.destroyBlocks && !world.isAirBlock(realPos)) {
 			if (this.minecraft.playerController.isInCreativeMode()) {
 				this.minecraft.playerController.clickBlock(realPos, EnumFacing.DOWN);
@@ -306,20 +322,22 @@ public class SchematicPrinter {
 
 				return !ConfigurationHandler.destroyInstantly;
 			} else {
-				EnumFacing choice = EnumFacing.UP;
+				EnumFacing choice = null;
 				for (EnumFacing baseBlock : EnumFacing.VALUES) {
-					Vec3d clickPos = FaceBlockSideTask.getClickPosition(pos, baseBlock);
+					Vec3d clickPos = FaceBlockSideTask.getClickPosition(realPos, baseBlock);
 					RayTraceResult raytraceresult = world.rayTraceBlocks(player.getPositionEyes(1F), clickPos);
-					boolean canSeeBlock = raytraceresult != null && raytraceresult.getBlockPos().equals(pos);
-					if (canSeeBlock) {
+					//boolean canSeeBlock = raytraceresult != null && raytraceresult.getBlockPos().equals(realBlock);
+					if (raytraceresult == null) {
 						choice = baseBlock;
 						break;
 					}
 				}
-				new FaceBlockSideTask(realPos, choice).queue();
-
-				new BlockBreakTask(realPos).queue();
-				this.timeout[x][y][z] = (byte) -1;
+				if (choice == null) {
+					return false;
+				}
+				
+				new BlockBreakTask(realPos, choice).queueWithFacing();
+				this.timeout[x][y][z] = (byte) -TimeoutState.HAS_TASK.ordinal();
 			}
 		}
 
@@ -339,7 +357,7 @@ public class SchematicPrinter {
 		}
 		if (placeBlock(world, player, realPos, blockState, itemStack)) {
 
-			this.timeout[x][y][z] = (byte) -1;
+			this.timeout[x][y][z] = (byte) -TimeoutState.HAS_TASK.ordinal();
 			if (!ConfigurationHandler.placeInstantly) {
 				return true;
 			}
@@ -350,10 +368,20 @@ public class SchematicPrinter {
 
 	public void setTimeout(BlockPos pos, int timeout) {
 		BlockPos p = pos.subtract(this.schematic.position);
-		this.timeout[p.getX()][p.getY()][p.getZ()] = (byte) timeout;
+		if (p.getX() >= 0 && p.getX() < this.schematic.getWidth() &&
+			p.getY() >= 0 && p.getY() < this.schematic.getHeight() &&
+			p.getZ() >= 0 && p.getZ() < this.schematic.getLength()) {
+			this.timeout[p.getX()][p.getY()][p.getZ()] = (byte) timeout;
+		}
+	}
+	
+	public boolean isBlockCorrect(BlockPos pos) {
+		final IBlockState blockState = this.schematic.getBlockState(pos.subtract(this.schematic.position));
+		final IBlockState realBlockState = minecraft.world.getBlockState(pos);
+		return BlockStateHelper.areBlockStatesEqual(blockState, realBlockState);
 	}
 
-	private boolean isSolid(final World world, final BlockPos pos, final EnumFacing side) {
+	public static boolean isSolid(final World world, final BlockPos pos, final EnumFacing side) {
 		final BlockPos offset = pos.offset(side);
 
 		final IBlockState blockState = world.getBlockState(offset);
@@ -410,7 +438,7 @@ public class SchematicPrinter {
 		if (solidSides.size() == 0) {
 			return false;
 		}
-		
+
 		final List<EnumFacing> directions;
 		final float offsetX;
 		final float offsetY;
@@ -483,7 +511,8 @@ public class SchematicPrinter {
 	}
 
 	private boolean placeBlock(final WorldClient world, final EntityPlayerSP player, final ItemStack itemStack,
-			final BlockPos pos, final EnumFacing side, final Vec3d hitVec, final EnumHand hand, ItemStack blockToPlace) {
+			final BlockPos pos, final EnumFacing side, final Vec3d hitVec, final EnumHand hand,
+			ItemStack blockToPlace) {
 		// FIXME: where did this event go?
 		/*
 		 * if (ForgeEventFactory.onPlayerInteract(player,
@@ -517,8 +546,7 @@ public class SchematicPrinter {
 				new StackUpTask(pos).queue();
 				new BlockPlaceTask(pos, side, hitVec, hand, blockToPlace).queue();
 			} else {
-				new FaceBlockSideTask(pos, side).queue();
-				new BlockPlaceTask(pos, side, hitVec, hand, blockToPlace).queue();
+				new BlockPlaceTask(pos, side, hitVec, hand, blockToPlace).queueWithFacing();
 			}
 		}
 
