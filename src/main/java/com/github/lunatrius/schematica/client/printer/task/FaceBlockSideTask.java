@@ -40,8 +40,8 @@ public class FaceBlockSideTask extends LoopedPrinterTask {
 
 		float targetYaw = MathHelper.wrapDegrees((float) (MathHelper.atan2(zDiff, xDiff) * (180D / Math.PI)) - 90.0F);
 		float targetPitch = MathHelper.wrapDegrees((float) (-(MathHelper.atan2(yDiff, distance) * (180D / Math.PI))));
-		player.rotationYaw = updateRotation(player.rotationYaw, targetYaw, 30F);
-		player.rotationPitch = updateRotation(player.rotationPitch, targetPitch, 30F);
+		player.rotationYaw = updateRotation(player.rotationYaw, targetYaw, 20F);
+		player.rotationPitch = updateRotation(player.rotationPitch, targetPitch, 20F);
 
 		float yawDiff = player.rotationYaw - player.prevRotationYaw;
 		if (yawDiff > 180F) {

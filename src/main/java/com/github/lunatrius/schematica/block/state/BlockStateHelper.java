@@ -1,6 +1,7 @@
 package com.github.lunatrius.schematica.block.state;
 
 import net.minecraft.block.Block;
+import net.minecraft.block.BlockStructureVoid;
 import net.minecraft.block.properties.IProperty;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.util.text.TextFormatting;
@@ -58,6 +59,10 @@ public class BlockStateHelper {
 
         final Block blockA = blockStateA.getBlock();
         final Block blockB = blockStateB.getBlock();
+        
+        if (blockA instanceof BlockStructureVoid || blockB instanceof BlockStructureVoid) {
+        	return true;
+        }
 
         return blockA == blockB && blockA.getMetaFromState(blockStateA) == blockB.getMetaFromState(blockStateB);
     }

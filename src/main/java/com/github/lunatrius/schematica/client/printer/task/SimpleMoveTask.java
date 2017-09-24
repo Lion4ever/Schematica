@@ -12,9 +12,6 @@ public class SimpleMoveTask extends LoopedPrinterTask {
 	private Vec3d pos;
 	private boolean sneak;
 	private static EntityPlayerSP player;
-	
-	private Vec3d motion;
-	private boolean firstUpdate = true;
 
 	public SimpleMoveTask(Vec3d pos, boolean sneak) {
 		super();
@@ -22,7 +19,6 @@ public class SimpleMoveTask extends LoopedPrinterTask {
 		this.sneak = sneak;
 		
 		player = Minecraft.getMinecraft().player;
-		motion = pos.subtract(player.getPositionVector()).normalize().scale(0.1d);
 	}
 
 	public SimpleMoveTask(BlockPos pos, boolean sneak) {
@@ -31,17 +27,18 @@ public class SimpleMoveTask extends LoopedPrinterTask {
 
 	@Override
 	public void onUpdate() {
-		if (firstUpdate) {
-			SchematicPrinter.INSTANCE.syncSneaking(player, sneak);
-			firstUpdate = false;
-		}
+		Vec3d motion = pos.subtract(player.getPositionVector()).normalize().scale(0.1d);
 		player.motionX = motion.x;
-		player.motionY = motion.y;
+		//player.motionY = motion.y;
 		player.motionZ = motion.z;
-		if (player.getPositionVector().subtract(pos).lengthSquared() < 0.5d) {
+		if (player.getPositionVector().subtract(pos).lengthSquared() < 0.25d) {
 			SchematicPrinter.INSTANCE.syncSneaking(player, false);
 			endTask();
 		}
+	}
+	
+	public void start() {
+		SchematicPrinter.INSTANCE.syncSneaking(player, sneak);
 	}
 
 }

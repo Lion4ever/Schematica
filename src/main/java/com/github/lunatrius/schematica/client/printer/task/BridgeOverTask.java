@@ -18,12 +18,14 @@ import net.minecraft.util.math.Vec3i;
 public class BridgeOverTask extends PrinterTask {
 
 	BlockPos pos;
+	EnumFacing side;
 
 	private static ItemStack dirtStack = new ItemStack(Block.getBlockFromName("minecraft:dirt"));
 	private static Minecraft minecraft = Minecraft.getMinecraft();
 
-	public BridgeOverTask(BlockPos pos) {
-		this.pos = pos;
+	public BridgeOverTask(BlockPos pos, EnumFacing fromSide) {
+		this.pos = pos.offset(EnumFacing.UP).offset(fromSide);
+		this.side = fromSide.getOpposite();
 	}
 
 	@Override
@@ -35,14 +37,14 @@ public class BridgeOverTask extends PrinterTask {
 			clearPos(pPos.offset(EnumFacing.UP, 2));
 			clearPos(pPos);
 			Vec3d hitVec = new Vec3d(pPos.getX() + 0.5d, pPos.getY() + 0.5d, pPos.getZ() + 0.5d);
-			new StackUpTask(below).queue();
+			new StackUpTask(below).queueWithFacing();
 			new BlockPlaceTask(below, EnumFacing.UP, hitVec, EnumHand.MAIN_HAND, dirtStack).queue();
 
 		} else {
 			Vec3i rest = pos.subtract(pPos);
 			EnumFacing tDir = EnumFacing.getFacingFromVector(rest.getX(), 0, rest.getZ());
 			BlockPos tPos = pPos.offset(tDir);
-			if (pos.getX() != tPos.getX() || pos.getZ() != tPos.getZ()) {
+			if (pos.getX() != pPos.getX() || pos.getZ() != pPos.getZ()) {
 				clearPos(tPos.offset(EnumFacing.UP));
 				clearPos(tPos);
 				if (!SchematicPrinter.isSolid(minecraft.world, pPos.offset(tDir), EnumFacing.DOWN)) {
@@ -54,21 +56,21 @@ public class BridgeOverTask extends PrinterTask {
 				new SimpleMoveTask(pPos.offset(tDir), false).queue();
 
 				if (!SchematicPrinter.INSTANCE.isBlockCorrect(below)) {
-					new BlockBreakTask(below, EnumFacing.UP).queue();
+					new BlockBreakTask(below, EnumFacing.UP).queueWithFacing();
 				}
 
 			} else {
-				SchematicPrinter.INSTANCE.setTimeout(below, ConfigurationHandler.timeout);
+				SchematicPrinter.INSTANCE.setTimeout(below, 1); //1 so BlockPlace gets first
 				SchematicPrinter.INSTANCE.currentTask = null;
-				clearPos(tPos.offset(EnumFacing.UP));
-				clearPos(tPos);
+				clearPos(pPos.offset(side).offset(EnumFacing.UP));
+				clearPos(pPos.offset(side));
 				if (nextTask != null) {
 					nextTask.queue();
 				}
 				return EnumActionResult.SUCCESS;
 			}
 		}
-		
+
 		SchematicPrinter.INSTANCE.currentTask = latest.nextTask;
 		PrinterTask.latestTask.nextTask = this;
 		PrinterTask.latestTask = latest;

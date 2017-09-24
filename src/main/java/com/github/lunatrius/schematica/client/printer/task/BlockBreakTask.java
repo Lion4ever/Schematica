@@ -23,10 +23,6 @@ public class BlockBreakTask extends LoopedPrinterTask {
 		pos = realPos;
 		side = fromSide;
 		minecraft = Minecraft.getMinecraft();
-		ItemStack pick = findPick();
-		if (pick != null) {
-			SchematicPrinter.INSTANCE.swapToItem(minecraft.player.inventory, pick);
-		}
 	}
 
 	private static ItemStack findPick() {
@@ -53,6 +49,13 @@ public class BlockBreakTask extends LoopedPrinterTask {
 			new FaceBlockSideTask(pos, side).queue();
 		}
 		this.queue();
+	}
+	
+	public void start() {
+		ItemStack pick = findPick();
+		if (pick != null) {
+			SchematicPrinter.INSTANCE.swapToItem(minecraft.player.inventory, pick);
+		}
 	}
 
 }

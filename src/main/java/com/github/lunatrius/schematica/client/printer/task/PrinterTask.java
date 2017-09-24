@@ -9,7 +9,6 @@ import net.minecraft.util.math.BlockPos;
 public abstract class PrinterTask {
 	
 	public PrinterTask nextTask;
-	public boolean needsUpdates = false;
 	public static PrinterTask latestTask;
 	
 	public void queue() {
@@ -23,10 +22,13 @@ public abstract class PrinterTask {
 	
 	public void endTask() {
 		SchematicPrinter.INSTANCE.currentTask = nextTask;
-		//Called in print instead
-		/*if (nextTask != null) {
-			nextTask.execute();
-		}*/
+		if (nextTask != null) {
+			//Called in print instead
+			//nextTask.execute();
+			if (nextTask instanceof LoopedPrinterTask) {
+				((LoopedPrinterTask) nextTask).start();
+			}
+		}
 	}
 	
 	public abstract EnumActionResult execute();

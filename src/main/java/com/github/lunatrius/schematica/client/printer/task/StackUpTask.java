@@ -41,4 +41,12 @@ public class StackUpTask extends LoopedPrinterTask {
 		}
 
 	}
+
+	public void queueWithFacing() {
+		new SimpleMoveTask(pos.offset(EnumFacing.UP), false).queue();
+		BridgeOverTask.clearPos(pos.offset(EnumFacing.UP, 2));
+		new FaceBlockSideTask(pos,EnumFacing.UP).queue();
+		this.queue();
+	}
+	
 }

@@ -1,5 +1,14 @@
 package com.github.lunatrius.schematica.client.printer;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Set;
+
 import com.github.lunatrius.core.util.math.BlockPosHelper;
 import com.github.lunatrius.core.util.math.MBlockPos;
 import com.github.lunatrius.schematica.block.state.BlockStateHelper;
@@ -14,7 +23,6 @@ import com.github.lunatrius.schematica.client.printer.task.FaceBlockSideTask;
 import com.github.lunatrius.schematica.client.printer.task.LeanOverBlockTask;
 import com.github.lunatrius.schematica.client.printer.task.LoopedPrinterTask;
 import com.github.lunatrius.schematica.client.printer.task.PrinterTask;
-import com.github.lunatrius.schematica.client.printer.task.SimpleMoveTask;
 import com.github.lunatrius.schematica.client.printer.task.StackUpTask;
 import com.github.lunatrius.schematica.client.renderer.RenderSchematic;
 import com.github.lunatrius.schematica.client.util.BlockStateToItemStack;
@@ -22,26 +30,16 @@ import com.github.lunatrius.schematica.client.world.SchematicWorld;
 import com.github.lunatrius.schematica.handler.ConfigurationHandler;
 import com.github.lunatrius.schematica.proxy.ClientProxy;
 import com.github.lunatrius.schematica.reference.Constants;
-import com.github.lunatrius.schematica.reference.Names;
 import com.github.lunatrius.schematica.reference.Reference;
-import com.github.lunatrius.schematica.util.ItemStackSortType;
 
 import net.minecraft.block.Block;
-import net.minecraft.block.BlockStructureVoid;
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.multiplayer.WorldClient;
-import net.minecraft.client.resources.I18n;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityLiving;
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.entity.IEntityLivingData;
-import net.minecraft.entity.ai.EntityMoveHelper;
-import net.minecraft.entity.passive.EntityVillager;
-import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.InventoryPlayer;
 import net.minecraft.inventory.ClickType;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemBucket;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.play.client.CPacketEntityAction;
@@ -53,17 +51,8 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.RayTraceResult;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.math.Vec3i;
-import net.minecraft.util.text.TextComponentTranslation;
-import net.minecraft.world.EnumDifficulty;
 import net.minecraft.world.World;
-import net.minecraft.world.chunk.storage.AnvilChunkLoader;
 import net.minecraftforge.fluids.BlockFluidBase;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
 
 public class SchematicPrinter {
 	public static final SchematicPrinter INSTANCE = new SchematicPrinter();
@@ -90,7 +79,19 @@ public class SchematicPrinter {
 
 	public boolean togglePrinting() {
 		this.isPrinting = !this.isPrinting && this.schematic != null;
-		currentTask = null;
+
+		if (!this.isPrinting) {
+			currentTask = null;
+			for (int i = 0; i < timeout.length; i++) {
+				for (int j = 0; j < timeout[i].length; j++) {
+					for (int k = 0; k < timeout[i][j].length; k++) {
+						if (timeout[i][j][k] == -TimeoutState.HAS_TASK.ordinal()) {
+							timeout[i][j][j] = 0;
+						}
+					}
+				}
+			}
+		}
 		return this.isPrinting;
 	}
 
@@ -125,7 +126,7 @@ public class SchematicPrinter {
 
 	public boolean faceTask() {
 		if (currentTask != null) {
-			if (currentTask.needsUpdates) {
+			if (currentTask instanceof LoopedPrinterTask) {
 
 				((LoopedPrinterTask) currentTask).onUpdate();
 				return true;
@@ -193,10 +194,6 @@ public class SchematicPrinter {
 			final Block realBlock = realBlockState.getBlock();
 
 			double currentSqDis = pos.distanceSqToCenter(dX, dY, dZ);
-			
-			if (blockState.getBlock() instanceof BlockStructureVoid) {
-				continue;
-			}
 
 			if (!BlockStateHelper.areBlockStatesEqual(blockState, realBlockState)) {
 				List<EnumFacing> sides = getSolidSides(world, realPos);
@@ -237,25 +234,67 @@ public class SchematicPrinter {
 
 				}
 			} else {
-				List<EnumFacing> sides = getSolidSides(world, closestMismatch);
+				List<EnumFacing> possibleSides;
+				IBlockState closestMState = schematic.getBlockState(closestMismatch.subtract(schematic.position));
+				ItemStack stack = closestMState.getBlock().getItem(world, closestMismatch, closestMState);
+				final PlacementData pd = PlacementRegistry.INSTANCE.getPlacementData(closestMState, stack);
+				if (pd != null) {
+					// float oldPitch = player.rotationPitch;
+					float oldYaw = player.rotationYaw;
+					possibleSides = new LinkedList<>();
+					for (int i = -180; i < 180; i += 90) {
+						player.rotationYaw = (float) i;
+						if (pd.isValidPlayerFacing(closestMState, player, closestMismatch, world)) {
+							possibleSides.add(player.getHorizontalFacing().getOpposite());
+						}
+					}
+					player.rotationYaw = oldYaw;
+				} else {
+					possibleSides = new LinkedList<>();
+					possibleSides.add(EnumFacing.NORTH);
+					possibleSides.add(EnumFacing.EAST);
+					possibleSides.add(EnumFacing.SOUTH);
+					possibleSides.add(EnumFacing.WEST);
+				}
 				EnumFacing choosenSide;
 				boolean pathFailed = false;
-				if (sides.size() > 0 && sides.get(sides.size() - 1).ordinal() >= 2) {
-					choosenSide = sides.get(sides.size() - 1);
-					//new PathFindTask(closestMismatch.offset(choosenSide).offset(EnumFacing.UP)).queue();
+				List<EnumFacing> solidSides = getSolidSides(world, closestMismatch);
+				solidSides.retainAll(possibleSides);
+				if (solidSides.size() > 0 && solidSides.get(solidSides.size() - 1).ordinal() >= 2) {
+					choosenSide = getClosestSide(closestMismatch, solidSides);
+
+					// new
+					// PathFindTask(closestMismatch.offset(choosenSide).offset(EnumFacing.UP)).queue();
 				}
-				
-				if (sides.size() == 0 || sides.get(sides.size() - 1).ordinal() < 2 || pathFailed || true) {
-					BlockPos d = player.getPosition().subtract(closestMismatch);
-					choosenSide = EnumFacing.getFacingFromVector(d.getX(), 0, d.getZ());
-					new BridgeOverTask(closestMismatch.offset(EnumFacing.UP)).queue();
+
+				if (solidSides.size() == 0 || solidSides.get(solidSides.size() - 1).ordinal() < 2 || pathFailed
+						|| true) {
+					choosenSide = getClosestSide(closestMismatch, possibleSides);
+					new BridgeOverTask(closestMismatch, choosenSide).queue();
 				}
 				if (!isSolid(world, closestMismatch, EnumFacing.DOWN)) {
 					new LeanOverBlockTask(closestMismatch.offset(choosenSide), choosenSide.getOpposite()).queue();
 				}
+				if (possibleSides.size() == 1) {
+					new FaceBlockSideTask(closestMismatch, EnumFacing.DOWN).queue();
+				}
 			}
 		}
 		return syncSlotAndSneaking(player, slot, isSneaking, true);
+	}
+
+	private EnumFacing getClosestSide(BlockPos pos, List<EnumFacing> sides) {
+		EnumFacing result = EnumFacing.NORTH;
+		double minDistance = Double.MAX_VALUE;
+		for (EnumFacing side : sides) {
+			Vec3d blockMiddle = new Vec3d(pos.offset(side)).addVector(0.5, 1, 0.5);
+			double currentDistance = minecraft.player.getPositionVector().subtract(blockMiddle).lengthSquared();
+			if (currentDistance < minDistance) {
+				minDistance = currentDistance;
+				result = side;
+			}
+		}
+		return result;
 	}
 
 	private boolean syncSlotAndSneaking(final EntityPlayerSP player, final int slot, final boolean isSneaking,
@@ -326,7 +365,8 @@ public class SchematicPrinter {
 				for (EnumFacing baseBlock : EnumFacing.VALUES) {
 					Vec3d clickPos = FaceBlockSideTask.getClickPosition(realPos, baseBlock);
 					RayTraceResult raytraceresult = world.rayTraceBlocks(player.getPositionEyes(1F), clickPos);
-					//boolean canSeeBlock = raytraceresult != null && raytraceresult.getBlockPos().equals(realBlock);
+					// boolean canSeeBlock = raytraceresult != null &&
+					// raytraceresult.getBlockPos().equals(realBlock);
 					if (raytraceresult == null) {
 						choice = baseBlock;
 						break;
@@ -335,7 +375,7 @@ public class SchematicPrinter {
 				if (choice == null) {
 					return false;
 				}
-				
+
 				new BlockBreakTask(realPos, choice).queueWithFacing();
 				this.timeout[x][y][z] = (byte) -TimeoutState.HAS_TASK.ordinal();
 			}
@@ -368,13 +408,12 @@ public class SchematicPrinter {
 
 	public void setTimeout(BlockPos pos, int timeout) {
 		BlockPos p = pos.subtract(this.schematic.position);
-		if (p.getX() >= 0 && p.getX() < this.schematic.getWidth() &&
-			p.getY() >= 0 && p.getY() < this.schematic.getHeight() &&
-			p.getZ() >= 0 && p.getZ() < this.schematic.getLength()) {
+		if (p.getX() >= 0 && p.getX() < this.schematic.getWidth() && p.getY() >= 0
+				&& p.getY() < this.schematic.getHeight() && p.getZ() >= 0 && p.getZ() < this.schematic.getLength()) {
 			this.timeout[p.getX()][p.getY()][p.getZ()] = (byte) timeout;
 		}
 	}
-	
+
 	public boolean isBlockCorrect(BlockPos pos) {
 		final IBlockState blockState = this.schematic.getBlockState(pos.subtract(this.schematic.position));
 		final IBlockState realBlockState = minecraft.world.getBlockState(pos);
@@ -541,9 +580,7 @@ public class SchematicPrinter {
 			AxisAlignedBB b = new AxisAlignedBB(pos.offset(EnumFacing.UP));
 
 			if (a.intersects(b) && side == EnumFacing.UP) {
-				new SimpleMoveTask(pos.offset(side), false).queue();
-				new FaceBlockSideTask(pos, side).queue();
-				new StackUpTask(pos).queue();
+				new StackUpTask(pos).queueWithFacing();
 				new BlockPlaceTask(pos, side, hitVec, hand, blockToPlace).queue();
 			} else {
 				new BlockPlaceTask(pos, side, hitVec, hand, blockToPlace).queueWithFacing();
@@ -554,10 +591,10 @@ public class SchematicPrinter {
 	}
 
 	public void syncSneaking(final EntityPlayerSP player, final boolean isSneaking) {
-		player.setSneaking(isSneaking);
+		/*player.setSneaking(isSneaking);
 		player.connection.sendPacket(new CPacketEntityAction(player,
 				isSneaking ? CPacketEntityAction.Action.START_SNEAKING : CPacketEntityAction.Action.STOP_SNEAKING));
-	}
+	*/}
 
 	public boolean swapToItem(final InventoryPlayer inventory, final ItemStack itemStack) {
 		return swapToItem(inventory, itemStack, true);

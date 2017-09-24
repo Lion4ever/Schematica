@@ -1,5 +1,7 @@
 package com.github.lunatrius.schematica.client.printer.task;
 
+import com.github.lunatrius.schematica.client.printer.SchematicPrinter;
+
 import net.minecraft.util.EnumActionResult;
 
 public abstract class LoopedPrinterTask extends PrinterTask {
@@ -8,10 +10,18 @@ public abstract class LoopedPrinterTask extends PrinterTask {
 		return null;
 	}
 
-	public LoopedPrinterTask() {
-		needsUpdates = true;
-	}
-
 	public abstract void onUpdate();
+	
+	public void start() {}
+
+	@Override
+	public void queue() {
+		if (SchematicPrinter.INSTANCE.currentTask == null) {
+			start();
+		}
+		super.queue();
+	}
+	
+	
 
 }
